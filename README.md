@@ -1,6 +1,6 @@
 # OmniFade - Frei0r Transition Plugin for Kdenlive
 
-A high‑performance, versatile cross‑fade transition for Kdenlive that goes beyond a simple dissolve.  
+A versatile cross‑fade transition for Kdenlive that goes beyond a simple dissolve.  
 
 <p align="center">
 <img width="416" height="351" alt="kdenlive_kQYBd47fkE" src="https://github.com/user-attachments/assets/3f978253-f92d-413e-b2a1-a63cd848deb8" />
