@@ -1,6 +1,6 @@
 # OmniFade - Frei0r Transition Plugin for Kdenlive
 
-A versatile cross‑fade transition for Kdenlive that goes beyond a simple dissolve.  
+A versatile cross‑fade transition for Kdenlive.   
 
 <p align="center">
 <img width="416" height="351" alt="kdenlive_kQYBd47fkE" src="https://github.com/user-attachments/assets/3f978253-f92d-413e-b2a1-a63cd848deb8" />
@@ -20,7 +20,7 @@ A versatile cross‑fade transition for Kdenlive that goes beyond a simple disso
   - **Zoom Strength (%)** – controls how intense the zoom effect is.
 - **Blur Strength** – radial blur that automatically adjusts its amount based on speed.
 - **Fill Background (average)** – fills the empty background with the average colour of each clip.
-- **Invert** – swaps the incoming and outgoing clips, useful for reversing the transition direction.
+- **Invert** – swaps the incoming and outgoing clips.
 
 ## Demo
 
