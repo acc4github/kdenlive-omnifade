@@ -22,6 +22,10 @@ A high‑performance, versatile cross‑fade transition for Kdenlive that goes b
 - **Fill Background (average)** – fills the empty background with the average colour of each clip.
 - **Invert** – swaps the incoming and outgoing clips, useful for reversing the transition direction.
 
+## Demo
+
+https://github.com/user-attachments/assets/8c42bd22-e770-4aee-8b01-798c84a0f23c
+
 ## Installation (Windows)
 
 1. Build or obtain the `omni-fade.dll` and `omni-fade.xml` files.
