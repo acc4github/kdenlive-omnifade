@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!DOCTYPE kpartgui>
+<transition tag="frei0r.omni-fade" id="frei0r.omni-fade" type="videotransition">
+    <name>OmniFade</name>
+    <description>Versatile cross-fade with independent zoom (expand/shrink) and speed-driven blur.</description>
+    <author>acc4commissions and Grok 4.3</author>
+
+    <parameter type="animated" name="position" max="1000" min="0" default="0=0;%out=1" factor="1000">
+        <name>Fade position (progress)</name>
+    </parameter>
+    <parameter type="double" name="speed_curve" max="100" min="0" default="0">
+        <name>Speed Curve (%)</name>
+    </parameter>
+    <parameter type="double" name="gentle_arrival" max="100" min="0" default="0">
+        <name>Gentle Arrival (%)</name>
+    </parameter>
+    <parameter type="double" name="zoom_strength" max="100" min="0" default="0">
+        <name>Zoom Strength</name>
+    </parameter>
+    <parameter type="list" name="arrival_zoom" default="1" paramlist="0;1;2">
+        <name>Arrival Zoom</name>
+        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
+    </parameter>
+    <parameter type="list" name="departure_zoom" default="1" paramlist="0;1;2">
+        <name>Departure Zoom</name>
+        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
+    </parameter>
+    <parameter type="double" name="blur_strength" max="100" min="0" default="0">
+        <name>Blur Strength</name>
+    </parameter>
+    <parameter type="bool" name="invert" default="0">
+        <name>Invert clips</name>
+    </parameter>
+
+<parameter type="bool" name="fill_background" default="0">
+    <name>Fill Background (average)</name>
+</parameter>
+
+    <preview>
+        <parameter name="position">0=0;-1=1</parameter>
+    </preview>
+</transition>
