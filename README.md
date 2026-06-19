@@ -3,7 +3,7 @@
 A versatile cross‑fade transition for Kdenlive.   
 
 <p align="center">
-<img width="416" height="351" alt="kdenlive_kQYBd47fkE" src="https://github.com/user-attachments/assets/3f978253-f92d-413e-b2a1-a63cd848deb8" />
+<img width="416" height="350" alt="kdenlive_NPM0m2l1Uy" src="https://github.com/user-attachments/assets/74e115cf-5b3a-4a06-bcee-fde3337bbb65" />
 </p>
 
 ## Features
