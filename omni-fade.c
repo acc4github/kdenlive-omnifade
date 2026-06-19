@@ -70,12 +70,13 @@ void f0r_get_plugin_info(f0r_plugin_info_t *info) {
 }
 
 void f0r_get_param_info(f0r_param_info_t *info, int idx) {
-    const char* names[] = {"position","speed_curve","gentle_arrival","zoom_strength",
-                           "arrival_zoom","departure_zoom","blur_strength","invert","fill_background"};
-    const char* expl[] = {"Fade position (progress)","Speed Curve (%)","Gentle Arrival (%)",
-                          "Zoom Strength","Arrival Zoom (0=Expand,1=Static,2=Shrink)",
-                          "Departure Zoom (0=Expand,1=Static,2=Shrink)","Blur Strength (%)",
-                          "Invert clips","Fill Background (average)"};
+    const char* names[] = {"position", "arrival_zoom", "departure_zoom", "speed_curve",
+                           "gentle_arrival", "zoom_strength", "blur_strength",
+                           "fill_background", "invert"};
+    const char* expl[] = {"Fade position (progress)", "Arrival Zoom (0=Expand,1=Static,2=Shrink)",
+                          "Departure Zoom (0=Expand,1=Static,2=Shrink)", "Speed Curve (%)",
+                          "Gentle Arrival (%)", "Zoom Strength", "Blur Strength (%)",
+                          "Fill Background (average)", "Invert clips"};
     info->name = names[idx];
     info->explanation = expl[idx];
     info->type = (idx == 7 || idx == 8) ? F0R_PARAM_BOOL : F0R_PARAM_DOUBLE;
@@ -99,22 +100,22 @@ void f0r_set_param_value(f0r_instance_t i, f0r_param_t p, int idx) {
     double v = *(double*)p;
     switch (idx) {
         case 0: inst->position = (float)v; break;
-        case 1: inst->speed_curve = (float)v; break;
-        case 2: inst->gentle_arrival = (float)v; break;
-        case 3: inst->zoom_strength = (float)v; inst->bounds_calculated = 0; break;
-        case 4:
+        case 1:
             inst->arrival_zoom = (int)(v + 0.5);
             if (inst->arrival_zoom < 0) inst->arrival_zoom = 0;
             else if (inst->arrival_zoom > 2) inst->arrival_zoom = 2;
             inst->bounds_calculated = 0; break;
-        case 5:
+        case 2:
             inst->departure_zoom = (int)(v + 0.5);
             if (inst->departure_zoom < 0) inst->departure_zoom = 0;
             else if (inst->departure_zoom > 2) inst->departure_zoom = 2;
             inst->bounds_calculated = 0; break;
+        case 3: inst->speed_curve = (float)v; break;
+        case 4: inst->gentle_arrival = (float)v; break;
+        case 5: inst->zoom_strength = (float)v; inst->bounds_calculated = 0; break;
         case 6: inst->blur_strength = (float)v; break;
-        case 7: inst->invert = (v > 0.5); inst->bounds_calculated = 0; break;
-        case 8: inst->fill_background = (v > 0.5); inst->bounds_calculated = 0; break;
+        case 7: inst->fill_background = (v > 0.5); inst->bounds_calculated = 0; break;
+        case 8: inst->invert = (v > 0.5); inst->bounds_calculated = 0; break;
     }
 }
 
@@ -123,14 +124,14 @@ void f0r_get_param_value(f0r_instance_t i, f0r_param_t p, int idx) {
     double *out = (double*)p;
     switch (idx) {
         case 0: *out = inst->position; break;
-        case 1: *out = inst->speed_curve; break;
-        case 2: *out = inst->gentle_arrival; break;
-        case 3: *out = inst->zoom_strength; break;
-        case 4: *out = inst->arrival_zoom; break;
-        case 5: *out = inst->departure_zoom; break;
+        case 1: *out = inst->arrival_zoom; break;
+        case 2: *out = inst->departure_zoom; break;
+        case 3: *out = inst->speed_curve; break;
+        case 4: *out = inst->gentle_arrival; break;
+        case 5: *out = inst->zoom_strength; break;
         case 6: *out = inst->blur_strength; break;
-        case 7: *out = inst->invert; break;
-        case 8: *out = inst->fill_background; break;
+        case 7: *out = inst->fill_background; break;
+        case 8: *out = inst->invert; break;
     }
 }
 
@@ -229,7 +230,7 @@ static uint32_t compute_average_color(const uint32_t *buf, int w, int h,
     if (min_x > max_x || min_y > max_y) return 0;
     uint64_t sum_r = 0, sum_g = 0, sum_b = 0, sum_a = 0;
     int total = 0;
-    int stride = 4;
+    int stride = 16;
     for (int y = min_y; y <= max_y; y += stride) {
         for (int x = min_x; x <= max_x; x += stride) {
             uint32_t px = buf[y * w + x];
@@ -334,10 +335,19 @@ static inline void render_simple(omni_fade_t *inst, uint32_t *restrict out,
                                  const uint32_t *restrict clip_out,
                                  const uint32_t *restrict clip_in,
                                  float p, int w, int h) {
+    int fill = inst->fill_background;
+    uint32_t avg_out = fill ? inst->avg_out : 0;
+    uint32_t avg_in  = fill ? inst->avg_in : 0;
+
     for (int y = 0; y < h; ++y) {
         int row = y * w;
         for (int x = 0; x < w; ++x) {
-            blend_pixel(clip_out[row + x], clip_in[row + x], p, &out[row + x]);
+            uint32_t out_px = sample_pixel(clip_out, w, h, x, y, avg_out, fill,
+                                           inst->out_min_x, inst->out_min_y, inst->out_max_x, inst->out_max_y);
+            uint32_t in_px  = sample_pixel(clip_in,  w, h, x, y, avg_in,  fill,
+                                           inst->in_min_x,  inst->in_min_y,  inst->in_max_x,  inst->in_max_y);
+
+            blend_pixel(out_px, in_px, p, &out[row + x]);
         }
     }
 }

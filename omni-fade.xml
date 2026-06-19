@@ -8,6 +8,14 @@
     <parameter type="animated" name="position" max="1000" min="0" default="0=0;%out=1" factor="1000">
         <name>Fade position (progress)</name>
     </parameter>
+    <parameter type="list" name="arrival_zoom" default="1" paramlist="0;1;2">
+        <name>Arrival Zoom</name>
+        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
+    </parameter>
+    <parameter type="list" name="departure_zoom" default="1" paramlist="0;1;2">
+        <name>Departure Zoom</name>
+        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
+    </parameter>
     <parameter type="double" name="speed_curve" max="100" min="0" default="0">
         <name>Speed Curve (%)</name>
     </parameter>
@@ -16,14 +24,6 @@
     </parameter>
     <parameter type="double" name="zoom_strength" max="100" min="0" default="0">
         <name>Zoom Strength</name>
-    </parameter>
-    <parameter type="list" name="arrival_zoom" default="1" paramlist="0;1;2">
-        <name>Arrival Zoom</name>
-        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
-    </parameter>
-    <parameter type="list" name="departure_zoom" default="1" paramlist="0;1;2">
-        <name>Departure Zoom</name>
-        <paramlistdisplay>Expand,Static,Shrink</paramlistdisplay>
     </parameter>
     <parameter type="double" name="blur_strength" max="100" min="0" default="0">
         <name>Blur Strength</name>
