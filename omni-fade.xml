@@ -28,14 +28,12 @@
     <parameter type="double" name="blur_strength" max="100" min="0" default="0">
         <name>Blur Strength</name>
     </parameter>
-    <parameter type="bool" name="invert" default="0">
-        <name>Invert clips</name>
-    </parameter>
-
-<parameter type="bool" name="fill_background" default="0">
+        <parameter type="bool" name="fill_background" default="0">
     <name>Fill Background (average)</name>
-</parameter>
-
+    </parameter>
+            <parameter type="bool" name="invert" default="0">
+        <name>Invert</name>
+    </parameter>
     <preview>
         <parameter name="position">0=0;-1=1</parameter>
     </preview>

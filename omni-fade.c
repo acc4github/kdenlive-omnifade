@@ -31,9 +31,9 @@ typedef struct {
     int in_min_x,  in_min_y,  in_max_x,  in_max_y;
     uint32_t avg_out, avg_in;
 
-    /* Fixed crop bounds for Shrink modes */
-    int out_crop_min_x, out_crop_min_y, out_crop_max_x, out_crop_max_y;
-    int in_crop_min_x,  in_crop_min_y,  in_crop_max_x,  in_crop_max_y;
+    /* Fixed crop bounds for Shrink modes (pre-calculated once as the maximum visible area) */
+    int out_shrink_crop_min_x, out_shrink_crop_min_y, out_shrink_crop_max_x, out_shrink_crop_max_y;
+    int in_shrink_crop_min_x,  in_shrink_crop_min_y,  in_shrink_crop_max_x,  in_shrink_crop_max_y;
 
     float curve_lut[CURVE_LUT_SIZE];
     float last_speed_curve;
@@ -59,12 +59,12 @@ void f0r_deinit(void) {}
 
 void f0r_get_plugin_info(f0r_plugin_info_t *info) {
     info->name = "OmniFade";
-    info->author = "acc4commissions and Grok (optimized v0.29)";
+    info->author = "acc4commissions and Grok (optimized v0.30)";
     info->plugin_type = F0R_PLUGIN_TYPE_MIXER2;
     info->color_model = F0R_COLOR_MODEL_PACKED32;
     info->frei0r_version = FREI0R_MAJOR_VERSION;
     info->major_version = 0;
-    info->minor_version = 29;
+    info->minor_version = 30;
     info->num_params = 9;
     info->explanation = "Ultra-fast OmniFade with reduced branching and unrolled blur.";
 }
@@ -314,6 +314,15 @@ static inline void blend_pixel(uint32_t out_px, uint32_t in_px, float t, uint32_
     uint8_t a2 = (in_px >> 24) & 0xFF, r2 = (in_px >> 16) & 0xFF,
             g2 = (in_px >> 8)  & 0xFF, b2 = in_px & 0xFF;
 
+    /* Fast path for common opaque case */
+    if (a1 == 255 && a2 == 255 && t >= 0.0f && t <= 1.0f) {
+        uint8_t r = (uint8_t)(r1 * (1.0f - t) + r2 * t + 0.5f);
+        uint8_t g = (uint8_t)(g1 * (1.0f - t) + g2 * t + 0.5f);
+        uint8_t b = (uint8_t)(b1 * (1.0f - t) + b2 * t + 0.5f);
+        *result = 0xFF000000 | (r << 16) | (g << 8) | b;
+        return;
+    }
+
     float alpha_out = a1 / 255.0f;
     float alpha_in  = a2 / 255.0f;
     float final_a = alpha_out * (1.0f - t) + alpha_in * t;
@@ -335,17 +344,17 @@ static inline void render_simple(omni_fade_t *inst, uint32_t *restrict out,
                                  const uint32_t *restrict clip_out,
                                  const uint32_t *restrict clip_in,
                                  float p, int w, int h) {
-    int fill = inst->fill_background;
-    uint32_t avg_out = fill ? inst->avg_out : 0;
-    uint32_t avg_in  = fill ? inst->avg_in : 0;
+    const int fill = inst->fill_background;
+    const uint32_t avg_out = fill ? inst->avg_out : 0;
+    const uint32_t avg_in  = fill ? inst->avg_in : 0;
+    const int out_min_x = inst->out_min_x, out_min_y = inst->out_min_y, out_max_x = inst->out_max_x, out_max_y = inst->out_max_y;
+    const int in_min_x = inst->in_min_x, in_min_y = inst->in_min_y, in_max_x = inst->in_max_x, in_max_y = inst->in_max_y;
 
     for (int y = 0; y < h; ++y) {
         int row = y * w;
         for (int x = 0; x < w; ++x) {
-            uint32_t out_px = sample_pixel(clip_out, w, h, x, y, avg_out, fill,
-                                           inst->out_min_x, inst->out_min_y, inst->out_max_x, inst->out_max_y);
-            uint32_t in_px  = sample_pixel(clip_in,  w, h, x, y, avg_in,  fill,
-                                           inst->in_min_x,  inst->in_min_y,  inst->in_max_x,  inst->in_max_y);
+            uint32_t out_px = sample_pixel(clip_out, w, h, x, y, avg_out, fill, out_min_x, out_min_y, out_max_x, out_max_y);
+            uint32_t in_px  = sample_pixel(clip_in,  w, h, x, y, avg_in,  fill, in_min_x,  in_min_y,  in_max_x,  in_max_y);
 
             blend_pixel(out_px, in_px, p, &out[row + x]);
         }
@@ -357,25 +366,28 @@ static inline void render_zoom_only(omni_fade_t *inst, uint32_t *restrict out,
                                     const uint32_t *restrict clip_in,
                                     float p, float zf, int dep_mode, int arr_mode,
                                     int w, int h) {
-    float cx = (w - 1) * 0.5f;
-    float cy = (h - 1) * 0.5f;
+    const float cx = (w - 1) * 0.5f;
+    const float cy = (h - 1) * 0.5f;
 
     float out_scale = (dep_mode == 0) ? sqrtf(1.0f + zf * p) :
                       (dep_mode == 2) ? fmaxf(MIN_SCALE, sqrtf(fmaxf(0.0f, 1.0f - zf * p))) : 1.0f;
     float in_scale  = (arr_mode == 0) ? sqrtf(1.0f - zf + zf * p) :
                       (arr_mode == 2) ? sqrtf(1.0f + zf - zf * p) : 1.0f;
 
-    float inv_out = 1.0f / out_scale;
-    float inv_in  = 1.0f / in_scale;
+    const float inv_out = 1.0f / out_scale;
+    const float inv_in  = 1.0f / in_scale;
 
-    int fill = inst->fill_background;
-    uint32_t avg_out = fill ? inst->avg_out : 0;
-    uint32_t avg_in  = fill ? inst->avg_in : 0;
+    const int fill = inst->fill_background;
+    const uint32_t avg_out = fill ? inst->avg_out : 0;
+    const uint32_t avg_in  = fill ? inst->avg_in : 0;
 
-    int out_crop = (dep_mode == 2);
-    int in_crop  = (arr_mode == 2);
-    int ocx1 = inst->out_crop_min_x, ocy1 = inst->out_crop_min_y, ocx2 = inst->out_crop_max_x, ocy2 = inst->out_crop_max_y;
-    int icx1 = inst->in_crop_min_x,  icy1 = inst->in_crop_min_y,  icx2 = inst->in_crop_max_x,  icy2 = inst->in_crop_max_y;
+    const int out_crop = (dep_mode == 2);
+    const int in_crop  = (arr_mode == 2);
+    const int ocx1 = inst->out_shrink_crop_min_x, ocy1 = inst->out_shrink_crop_min_y, ocx2 = inst->out_shrink_crop_max_x, ocy2 = inst->out_shrink_crop_max_y;
+    const int icx1 = inst->in_shrink_crop_min_x,  icy1 = inst->in_shrink_crop_min_y,  icx2 = inst->in_shrink_crop_max_x,  icy2 = inst->in_shrink_crop_max_y;
+
+    const int out_min_x = inst->out_min_x, out_min_y = inst->out_min_y, out_max_x = inst->out_max_x, out_max_y = inst->out_max_y;
+    const int in_min_x = inst->in_min_x, in_min_y = inst->in_min_y, in_max_x = inst->in_max_x, in_max_y = inst->in_max_y;
 
     for (int y = 0; y < h; ++y) {
         int row = y * w;
@@ -383,12 +395,12 @@ static inline void render_zoom_only(omni_fade_t *inst, uint32_t *restrict out,
             uint32_t out_px = (out_crop && (x < ocx1 || x > ocx2 || y < ocy1 || y > ocy2)) ?
                               (fill ? avg_out : 0) :
                               sample_zoomed_fast(clip_out, w, h, inv_out, cx, cy, x, y, avg_out, fill,
-                                                 inst->out_min_x, inst->out_min_y, inst->out_max_x, inst->out_max_y);
+                                                 out_min_x, out_min_y, out_max_x, out_max_y);
 
             uint32_t in_px = (in_crop && (x < icx1 || x > icx2 || y < icy1 || y > icy2)) ?
                              (fill ? avg_in : 0) :
                              sample_zoomed_fast(clip_in, w, h, inv_in, cx, cy, x, y, avg_in, fill,
-                                                inst->in_min_x, inst->in_min_y, inst->in_max_x, inst->in_max_y);
+                                                in_min_x, in_min_y, in_max_x, in_max_y);
 
             blend_pixel(out_px, in_px, p, &out[row + x]);
         }
@@ -400,16 +412,16 @@ static inline void render_zoom_blur(omni_fade_t *inst, uint32_t *restrict out,
                                     const uint32_t *restrict clip_in,
                                     float p, float zf, float base_speed,
                                     int dep_mode, int arr_mode, int w, int h) {
-    float cx = (w - 1) * 0.5f;
-    float cy = (h - 1) * 0.5f;
+    const float cx = (w - 1) * 0.5f;
+    const float cy = (h - 1) * 0.5f;
 
     float out_scale = (dep_mode == 0) ? sqrtf(1.0f + zf * p) :
                       (dep_mode == 2) ? fmaxf(MIN_SCALE, sqrtf(fmaxf(0.0f, 1.0f - zf * p))) : 1.0f;
     float in_scale  = (arr_mode == 0) ? sqrtf(1.0f - zf + zf * p) :
                       (arr_mode == 2) ? sqrtf(1.0f + zf - zf * p) : 1.0f;
 
-    float inv_out = 1.0f / out_scale;
-    float inv_in  = 1.0f / in_scale;
+    const float inv_out = 1.0f / out_scale;
+    const float inv_in  = 1.0f / in_scale;
 
     float norm_blur = (inst->blur_strength / 100.0f) * 0.5f;
     float out_motion = (dep_mode == 0 || dep_mode == 2) ? zf * base_speed * 100.0f : 0.0f;
@@ -417,26 +429,29 @@ static inline void render_zoom_blur(omni_fade_t *inst, uint32_t *restrict out,
     float blur_out_val = norm_blur * (base_speed + out_motion);
     float blur_in_val  = norm_blur * (base_speed + in_motion);
 
-    int do_blur_out = (blur_out_val > 0.7f);
-    int do_blur_in  = (blur_in_val > 0.7f);
+    const int do_blur_out = (blur_out_val > 0.7f);
+    const int do_blur_in  = (blur_in_val > 0.7f);
 
-    float max_dim = (float)(w > h ? w : h);
+    const float max_dim = (float)(w > h ? w : h);
     float out_step = blur_out_val * inst->resolution_scale * 2.0f / (max_dim * SQUARE_SAMPLES);
     float in_step  = blur_in_val  * inst->resolution_scale * 2.0f / (max_dim * SQUARE_SAMPLES);
-    float out_dir = (dep_mode == 0) ? out_step : -out_step;
-    float in_dir  = (arr_mode == 0) ? in_step  : -in_step;
+    const float out_dir = (dep_mode == 0) ? out_step : -out_step;
+    const float in_dir  = (arr_mode == 0) ? in_step  : -in_step;
 
-    int fill = inst->fill_background;
-    uint32_t avg_out = fill ? inst->avg_out : 0;
-    uint32_t avg_in  = fill ? inst->avg_in : 0;
+    const int fill = inst->fill_background;
+    const uint32_t avg_out = fill ? inst->avg_out : 0;
+    const uint32_t avg_in  = fill ? inst->avg_in : 0;
 
-    int out_edge_prot = (dep_mode == 0) && !fill;
-    int in_edge_prot  = (arr_mode == 0) && !fill;
+    const int out_edge_prot = (dep_mode == 0);
+    const int in_edge_prot  = (arr_mode == 0);
 
-    int out_crop = (dep_mode == 2);
-    int in_crop  = (arr_mode == 2);
-    int ocx1 = inst->out_crop_min_x, ocy1 = inst->out_crop_min_y, ocx2 = inst->out_crop_max_x, ocy2 = inst->out_crop_max_y;
-    int icx1 = inst->in_crop_min_x,  icy1 = inst->in_crop_min_y,  icx2 = inst->in_crop_max_x,  icy2 = inst->in_crop_max_y;
+    const int out_crop = (dep_mode == 2);
+    const int in_crop  = (arr_mode == 2);
+    const int ocx1 = inst->out_shrink_crop_min_x, ocy1 = inst->out_shrink_crop_min_y, ocx2 = inst->out_shrink_crop_max_x, ocy2 = inst->out_shrink_crop_max_y;
+    const int icx1 = inst->in_shrink_crop_min_x,  icy1 = inst->in_shrink_crop_min_y,  icx2 = inst->in_shrink_crop_max_x,  icy2 = inst->in_shrink_crop_max_y;
+
+    const int out_min_x = inst->out_min_x, out_min_y = inst->out_min_y, out_max_x = inst->out_max_x, out_max_y = inst->out_max_y;
+    const int in_min_x = inst->in_min_x, in_min_y = inst->in_min_y, in_max_x = inst->in_max_x, in_max_y = inst->in_max_y;
 
     for (int y = 0; y < h; ++y) {
         int row = y * w;
@@ -444,16 +459,16 @@ static inline void render_zoom_blur(omni_fade_t *inst, uint32_t *restrict out,
             uint32_t out_px = (out_crop && (x < ocx1 || x > ocx2 || y < ocy1 || y > ocy2)) ? (fill ? avg_out : 0) :
                 (do_blur_out ? sample_square_blurred_fast(clip_out, w, h, inv_out, cx, cy, x, y,
                                                           out_dir, out_edge_prot, avg_out, fill,
-                                                          inst->out_min_x, inst->out_min_y, inst->out_max_x, inst->out_max_y) :
+                                                          out_min_x, out_min_y, out_max_x, out_max_y) :
                                sample_zoomed_fast(clip_out, w, h, inv_out, cx, cy, x, y, avg_out, fill,
-                                                  inst->out_min_x, inst->out_min_y, inst->out_max_x, inst->out_max_y));
+                                                  out_min_x, out_min_y, out_max_x, out_max_y));
 
             uint32_t in_px = (in_crop && (x < icx1 || x > icx2 || y < icy1 || y > icy2)) ? (fill ? avg_in : 0) :
                 (do_blur_in ? sample_square_blurred_fast(clip_in, w, h, inv_in, cx, cy, x, y,
                                                          in_dir, in_edge_prot, avg_in, fill,
-                                                         inst->in_min_x, inst->in_min_y, inst->in_max_x, inst->in_max_y) :
+                                                         in_min_x, in_min_y, in_max_x, in_max_y) :
                               sample_zoomed_fast(clip_in, w, h, inv_in, cx, cy, x, y, avg_in, fill,
-                                                 inst->in_min_x, inst->in_min_y, inst->in_max_x, inst->in_max_y));
+                                                 in_min_x, in_min_y, in_max_x, in_max_y));
 
             blend_pixel(out_px, in_px, p, &out[row + x]);
         }
@@ -492,17 +507,17 @@ static void apply_fade(omni_fade_t *inst, uint32_t *restrict out,
 
         if (dep_mode == 2) {
             float scale_init = 1.0f;
-            inst->out_crop_min_x = (int)(cx + (inst->out_min_x - cx) * scale_init + 0.5f);
-            inst->out_crop_max_x = (int)(cx + (inst->out_max_x - cx) * scale_init + 0.5f);
-            inst->out_crop_min_y = (int)(cy + (inst->out_min_y - cy) * scale_init + 0.5f);
-            inst->out_crop_max_y = (int)(cy + (inst->out_max_y - cy) * scale_init + 0.5f);
+            inst->out_shrink_crop_min_x = (int)(cx + (inst->out_min_x - cx) * scale_init + 0.5f);
+            inst->out_shrink_crop_max_x = (int)(cx + (inst->out_max_x - cx) * scale_init + 0.5f);
+            inst->out_shrink_crop_min_y = (int)(cy + (inst->out_min_y - cy) * scale_init + 0.5f);
+            inst->out_shrink_crop_max_y = (int)(cy + (inst->out_max_y - cy) * scale_init + 0.5f);
         }
         if (arr_mode == 2) {
             float scale_init = sqrtf(1.0f + zf);
-            inst->in_crop_min_x = (int)(cx + (inst->in_min_x - cx) * scale_init + 0.5f);
-            inst->in_crop_max_x = (int)(cx + (inst->in_max_x - cx) * scale_init + 0.5f);
-            inst->in_crop_min_y = (int)(cy + (inst->in_min_y - cy) * scale_init + 0.5f);
-            inst->in_crop_max_y = (int)(cy + (inst->in_max_y - cy) * scale_init + 0.5f);
+            inst->in_shrink_crop_min_x = (int)(cx + (inst->in_min_x - cx) * scale_init + 0.5f);
+            inst->in_shrink_crop_max_x = (int)(cx + (inst->in_max_x - cx) * scale_init + 0.5f);
+            inst->in_shrink_crop_min_y = (int)(cy + (inst->in_min_y - cy) * scale_init + 0.5f);
+            inst->in_shrink_crop_max_y = (int)(cy + (inst->in_max_y - cy) * scale_init + 0.5f);
         }
         inst->bounds_calculated = 1;
     }
