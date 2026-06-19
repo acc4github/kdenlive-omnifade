@@ -2,9 +2,6 @@
 #include <stdint.h>
 #include <math.h>
 #include <frei0r.h>
-#ifdef __SSE2__
-#include <emmintrin.h>
-#endif
 
 #define CURVE_LUT_SIZE     512
 #define REFERENCE_WIDTH    1920.0f
@@ -28,11 +25,13 @@ typedef struct {
     int invert;
     int fill_background;
 
+    /* Content bounds – cached once per instance */
     int bounds_calculated;
     int out_min_x, out_min_y, out_max_x, out_max_y;
     int in_min_x,  in_min_y,  in_max_x,  in_max_y;
     uint32_t avg_out, avg_in;
 
+    /* Fixed crop bounds for Shrink modes */
     int out_crop_min_x, out_crop_min_y, out_crop_max_x, out_crop_max_y;
     int in_crop_min_x,  in_crop_min_y,  in_crop_max_x,  in_crop_max_y;
 
@@ -60,14 +59,14 @@ void f0r_deinit(void) {}
 
 void f0r_get_plugin_info(f0r_plugin_info_t *info) {
     info->name = "OmniFade";
-    info->author = "acc4commissions and Grok (SSE2 optimized v0.30)";
+    info->author = "acc4commissions and Grok (optimized v0.29)";
     info->plugin_type = F0R_PLUGIN_TYPE_MIXER2;
     info->color_model = F0R_COLOR_MODEL_PACKED32;
     info->frei0r_version = FREI0R_MAJOR_VERSION;
     info->major_version = 0;
-    info->minor_version = 30;
+    info->minor_version = 29;
     info->num_params = 9;
-    info->explanation = "Ultra-fast OmniFade with SSE2 acceleration.";
+    info->explanation = "Ultra-fast OmniFade with reduced branching and unrolled blur.";
 }
 
 void f0r_get_param_info(f0r_param_info_t *info, int idx) {
